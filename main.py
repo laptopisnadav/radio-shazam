@@ -1,8 +1,12 @@
 import os
 import asyncio
+import threading
 import time
+from flask import Flask
 from supabase import create_client
 from shazamio import Shazam
+
+app = Flask(__name__)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://I1U4I614Hq13v3DrRFQZ9w.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -10,11 +14,10 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 shazam = Shazam()
 
-# רשימת התחנות של Multix (עדכן את ה-id וה-stream_url של כל תחנה)
 STATIONS = [
     {
         "id": "multix_station_1",
-        "stream_url": "https://stream.multix.co.il/live"  # הכנס כאן את ה-Stream URL האמיתי
+        "stream_url": "https://stream.multix.co.il/live"
     }
 ]
 
@@ -23,7 +26,6 @@ async def recognize_and_update():
         try:
             out = await shazam.recognize(station["stream_url"])
             track = out.get("track", {})
-            
             song_name = track.get("title")
             artist = track.get("subtitle")
 
@@ -33,11 +35,21 @@ async def recognize_and_update():
                     "song_name": song_name,
                     "artist": artist
                 }).execute()
-                print(f"Updated {station['id']}: {song_name} - {artist}")
         except Exception as e:
             print(f"Error checking {station['id']}: {e}")
 
-if __name__ == "__main__":
+def run_loop():
     while True:
         asyncio.run(recognize_and_update())
-        time.sleep(90)  # בדיקה כל דקה וחצי (90 שניות)
+        time.sleep(90)
+
+# מריץ את הלולאה ברקע ברגע שהשרת עולה
+threading.Thread(target=run_loop, daemon=True).start()
+
+@app.route('/')
+def health_check():
+    return "Bot is running!"
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
