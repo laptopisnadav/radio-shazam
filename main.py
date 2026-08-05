@@ -1,6 +1,5 @@
 import os
 import re
-import asyncio
 import threading
 import time
 import requests
@@ -12,9 +11,6 @@ app = Flask(__name__)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    print("WARNING: SUPABASE_URL or SUPABASE_KEY environment variables are missing!")
-
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
 STATIONS = [
@@ -25,7 +21,6 @@ STATIONS = [
 ]
 
 def fetch_now_playing():
-    """שולף את השיר המתנגן כרגע מ-OnlineRadioBox בצורה מהירה ומיידית"""
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get("https://onlineradiobox.com/il/glglz/playlist/", headers=headers, timeout=5)
@@ -39,7 +34,7 @@ def fetch_now_playing():
                 return raw, "תחנת רדיו"
     except Exception as e:
         print(f"Error fetching metadata: {e}")
-    return None, None
+    return "Live Radio Stream", "Station Playing"
 
 def update_supabase():
     if not supabase:
@@ -49,10 +44,6 @@ def update_supabase():
     for station in STATIONS:
         print(f"Checking station: {station['id']}...")
         song_name, artist = fetch_now_playing()
-
-        if not song_name:
-            song_name = "Live Radio Stream"
-            artist = "Station Playing"
 
         print(f"-> WRITING TO SUPABASE: {song_name} - {artist}")
         try:
@@ -73,7 +64,7 @@ def run_loop():
             update_supabase()
         except Exception as e:
             print(f"Loop error: {e}")
-        time.sleep(15)  # מעדכן בכל 15 שניות
+        time.sleep(15)
 
 threading.Thread(target=run_loop, daemon=True).start()
 
