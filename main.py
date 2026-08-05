@@ -8,10 +8,13 @@ from shazamio import Shazam
 
 app = Flask(__name__)
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://I1U4I614Hq13v3DrRFQZ9w.supabase.co")
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("WARNING: SUPABASE_URL or SUPABASE_KEY environment variables are missing!")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 shazam = Shazam()
 
 STATIONS = [
@@ -22,7 +25,12 @@ STATIONS = [
 ]
 
 async def recognize_and_update():
+    if not supabase:
+        print("Supabase client is not initialized.")
+        return
+
     for station in STATIONS:
+        print(f"Checking station: {station['id']}...")
         try:
             out = await shazam.recognize(station["stream_url"])
             track = out.get("track", {})
@@ -30,20 +38,29 @@ async def recognize_and_update():
             artist = track.get("subtitle")
 
             if song_name:
-                supabase.table("radio_metadata").upsert({
+                print(f"Identified: {song_name} - {artist}")
+                data = {
                     "station_id": station["id"],
                     "song_name": song_name,
                     "artist": artist
-                }).execute()
+                }
+                res = supabase.table("radio_metadata").upsert(data).execute()
+                print(f"Successfully updated Supabase for {station['id']}: {res}")
+            else:
+                print(f"No song identified for {station['id']}")
+
         except Exception as e:
             print(f"Error checking {station['id']}: {e}")
 
 def run_loop():
+    print("Background worker loop started...")
     while True:
-        asyncio.run(recognize_and_update())
+        try:
+            asyncio.run(recognize_and_update())
+        except Exception as e:
+            print(f"Loop error: {e}")
         time.sleep(90)
 
-# מריץ את הלולאה ברקע ברגע שהשרת עולה
 threading.Thread(target=run_loop, daemon=True).start()
 
 @app.route('/')
